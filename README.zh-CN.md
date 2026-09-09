@@ -37,7 +37,7 @@ Hook 不随仓库提交，本地全局可用，不污染任何代码。
 - 以仓库为维度组织，而非以服务为维度组织。支持 monorepo，支持多端口申请。
 - 可选的宿主机目录监控，自动发现新加入的 linked worktree，可解决 coding agent 沙箱权限问题。
 - 不影响项目本身的 Git Hooks，在 `wte` 的 `post-checkout` Hook 执行完后，将继续调用项目自身的可执行 Git Hook。
-- 零侵入性，无 wrapper，无 skill，无须修改 coding agent 提示词或启动命令。
+- 日常同步由原生 Git Hooks 完成，无需 wrapper 或 skill 参与，无须修改 coding agent 提示词或启动命令。
 
 ## 环境要求
 
@@ -57,6 +57,42 @@ uv tool install worktree-env
 ```bash
 uv tool upgrade worktree-env
 ```
+
+## 可选的配置 Skill
+
+[wte-setup](skills/wte-setup/SKILL.md) 帮助 Agent 分析项目、生成 Profile 草案、将本机配置迁移到仓库外并验收。它会区分一次性迁移与长期 Worktree 投影，并在执行计划中的变更前征求批准。Skill 仅用于辅助配置；日常同步由 Git Hooks 和可选的 Monitor 完成。
+
+先获取本仓库（已有克隆可直接使用）：
+
+```bash
+git clone --depth 1 https://github.com/archcst/worktree-env.git
+cd worktree-env
+```
+
+阅读 `skills/wte-setup/SKILL.md` 及其 `references/` 内容后，在仓库根目录执行以下命令，将完整 Skill 安装到用户级目录：
+
+```bash
+(
+  set -eu
+  dest="$HOME/.agents/skills/wte-setup"
+  if [ -e "$dest" ] || [ -L "$dest" ]; then
+    printf 'Already installed: %s; back it up and move it aside before installing.\n' "$dest" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -R skills/wte-setup "$dest"
+)
+```
+
+Pi 会自动发现 `~/.agents/skills/`。在需要配置的项目中开启新会话，调用：
+
+```text
+/skill:wte-setup 帮我为当前项目配置 worktree-env
+```
+
+其他 Agent 工具请使用其规定的用户级 Skill 目录和调用方式，复制时保留完整的 `wte-setup/` 目录及参考文件。安装 Skill 只复制指令，不会运行 `wte init` 或修改项目配置；实际使用时，Agent 可以引导安装 `worktree-env`。
+
+更新时，先拉取仓库最新变更并阅读 Skill，将已安装目录移到**所有 Skill 发现目录之外**备份，再执行上面的安装命令；个人修改也保留在备份中。卸载时只移除已安装的 Skill 目录，不影响 wte 的 Profiles、Hooks 或 Monitor。
 
 ## 开始使用
 

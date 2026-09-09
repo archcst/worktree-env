@@ -70,8 +70,8 @@ immediately after creation.
   including those created within coding agent sandboxes.
 - Preserves the project's own Git hooks. After the `post-checkout` hook for `wte`
   finishes, it invokes the project's own executable Git hook.
-- Zero intrusion: no wrapper, no skill, and no changes to coding agent prompts or
-  project start commands.
+- Native Git hooks handle day-to-day synchronization without a wrapper or an
+  agent skill, and without changing coding agent prompts or project start commands.
 
 ## Requirements
 
@@ -91,6 +91,55 @@ uv tool install worktree-env
 ```bash
 uv tool upgrade worktree-env
 ```
+
+## Optional setup skill
+
+The [wte-setup skill](skills/wte-setup/SKILL.md) helps an agent inspect your project,
+draft a profile, migrate local configuration outside the repository, and verify the
+result. It distinguishes one-time migration from ongoing worktree projection and
+requests approval for planned changes. The skill is optional; normal synchronization
+runs through Git hooks and the optional Monitor.
+
+Get the skill from this repository (use your existing checkout if you have one):
+
+```bash
+git clone --depth 1 https://github.com/archcst/worktree-env.git
+cd worktree-env
+```
+
+Review `skills/wte-setup/SKILL.md` and its `references/` directory, then run this
+from the repository root to install the complete skill at user scope:
+
+```bash
+(
+  set -eu
+  dest="$HOME/.agents/skills/wte-setup"
+  if [ -e "$dest" ] || [ -L "$dest" ]; then
+    printf 'Already installed: %s; back it up and move it aside before installing.\n' "$dest" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -R skills/wte-setup "$dest"
+)
+```
+
+Pi discovers `~/.agents/skills/` automatically. Open a new agent session in the
+project you want to configure and invoke:
+
+```text
+/skill:wte-setup Help me configure worktree-env for this project.
+```
+
+For other agent tools, use their documented user-level skill directory and invocation
+method. Copy the entire `wte-setup/` directory, including its references. Installing
+the skill only copies instructions; it does not run `wte init` or change project
+configuration. During use, the agent can guide you through installing `worktree-env`.
+
+To update, pull the latest repository changes, review the skill, and move the existing
+installed directory to a backup **outside all skill discovery directories** before
+rerunning the install block. Keep any personal edits in that backup. To remove the
+skill, remove only its installed directory; wte profiles, hooks, and Monitor remain
+unchanged.
 
 ## Getting started
 
