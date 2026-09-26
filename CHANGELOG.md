@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+- Support shared directories as well as files in `link-files`, including `doctor`
+  checks and idempotent synchronization.
+- Reject overlapping projection targets and source/target cycles; preserve
+  existing real directories when creating links.
+- Distribute the `wte-setup` agent skill with an installation helper.
+
 ## [0.6.0] - 2026-08-22
 
 - Refresh Monitor repository watch paths automatically when profiles are added,

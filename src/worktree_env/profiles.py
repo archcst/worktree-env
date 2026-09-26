@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import yaml
 
 from .paths import AppPaths
-from .utils import WteError, expand_home, run_git
+from .utils import WteError, expand_home, run_git, safe_worktree_target
 
 Profile = Dict[str, Any]
 PORT_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -149,6 +149,41 @@ def _port_claims(profile: Profile) -> Sequence[Dict[str, Any]]:
     return raw if isinstance(raw, list) else []
 
 
+def projection_target_errors(profile: Profile, root: Optional[Path] = None) -> List[str]:
+    """Reject overlapping targets before any links or files are projected."""
+    errors: List[str] = []
+    targets: List[Tuple[str, Path]] = []
+    for canonical, legacy in (("link-files", "secrets"), ("write-files", "writes")):
+        entries = aliased_value(profile, canonical, legacy, default=[]) or []
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            value = (
+                aliased_value(entry, "target", "path")
+                if canonical == "write-files" else entry.get("target")
+            )
+            if not value:
+                continue
+            label = f"{canonical}[{index}].target"
+            target = Path(str(value))
+            if target == Path(".") or target.is_absolute() or ".." in target.parts:
+                errors.append(f"{label} must be a relative path inside the worktree")
+                continue
+            if root is not None:
+                try:
+                    target = safe_worktree_target(root, str(value))
+                except WteError as exc:
+                    errors.append(f"{label}: {exc}")
+                    continue
+            for other_label, other in targets:
+                if target == other or target in other.parents or other in target.parents:
+                    errors.append(f"overlapping projection targets: {other_label} and {label}")
+            targets.append((label, target))
+    return errors
+
+
 def validate_profiles(paths: AppPaths) -> Tuple[List[str], List[str]]:
     """Validate all profiles without requiring their worktrees to exist."""
     errors: List[str] = []
@@ -266,6 +301,8 @@ def validate_profiles(paths: AppPaths) -> Tuple[List[str], List[str]]:
                     errors.append(
                         f"{label}: {links_key}[{index}].target must stay inside the worktree"
                     )
+
+        errors.extend(f"{label}: {error}" for error in projection_target_errors(profile))
 
         setup_key = _selected_key(profile, "setup-commands", "init")
         setup_commands = aliased_value(

@@ -33,13 +33,16 @@ port-claims:
   - id: frontend
   - id: backend
 
-# Optional local secret files. Sources stay outside Git; targets are replaced
-# with symlinks inside each matched worktree.
+# Optional shared files or directories. Sources stay outside Git; targets become
+# symlinks inside each matched worktree. Existing real directories are preserved.
+# Targets must not overlap each other or write-files targets.
 link-files:
   - source: $HOME/.config/example-app/frontend.env
     target: apps/frontend/.env
   - source: $HOME/.config/example-app/backend.env
     target: apps/backend/.env
+  # - source: $HOME/.config/example-app/certs
+  #   target: apps/backend/certs
 
 # Optional generated files. Each target is overwritten completely on sync.
 write-files:

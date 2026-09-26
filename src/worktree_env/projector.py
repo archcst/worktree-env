@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from .config import load_port_pool
 from .paths import AppPaths
-from .profiles import Profile, aliased_value, find_profile
+from .profiles import Profile, aliased_value, find_profile, projection_target_errors
 from .registry import (
     allocate_ports,
     load_registry,
@@ -46,7 +46,11 @@ def _secret_entries(profile: Profile) -> List[Dict[str, Any]]:
 
 
 def apply_secrets(profile: Profile, root: Path) -> None:
-    """Replace configured targets with symlinks to existing local secret files."""
+    """Link local files or directories, preserving existing real directories."""
+    errors = projection_target_errors(profile, root)
+    if errors:
+        raise WteError("; ".join(errors))
+    planned = []
     for entry in _secret_entries(profile):
         source_raw = str(entry.get("source") or "").strip()
         target_raw = str(entry.get("target") or "").strip()
@@ -54,15 +58,24 @@ def apply_secrets(profile: Profile, root: Path) -> None:
             continue
         source = expand_profile_path(source_raw, profile).resolve()
         target = safe_worktree_target(root, target_raw)
-        if not source.is_file():
-            log(f"secret skipped; source does not exist: {source}")
+        if not (source.is_file() or source.is_dir()):
+            log(f"secret skipped; source is missing or not a file or directory: {source}")
+            continue
+        if source == target or target in source.parents or (
+            source.is_dir() and source in target.parents
+        ):
+            raise WteError(f"secret source and target overlap: {source} -> {target}")
+        if target.is_dir() and not target.is_symlink():
+            raise WteError(f"secret target is a directory: {target}")
+        planned.append((source, target))
+
+    for source, target in planned:
+        if target.is_symlink() and target.resolve() == source:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.is_symlink() or target.exists():
-            if target.is_dir() and not target.is_symlink():
-                raise WteError(f"secret target is a directory: {target}")
             target.unlink()
-        target.symlink_to(source)
+        target.symlink_to(source, target_is_directory=source.is_dir())
 
 
 def apply_writes(profile: Profile, root: Path, ports: Dict[str, int]) -> None:

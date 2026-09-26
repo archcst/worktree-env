@@ -31,7 +31,7 @@ def test_init_template_is_commented_and_not_an_active_yaml_profile(app_paths):
     text = template.read_text()
     assert "# A unique identifier" in text
     assert "# Port IDs form one contiguous block" in text
-    assert "# Optional local secret files" in text
+    assert "# Optional shared files or directories" in text
     assert "# Optional generated files" in text
     assert "# Optional worktree initializers" in text
     assert "main-worktree:" in text

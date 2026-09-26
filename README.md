@@ -219,13 +219,15 @@ port-claims:
   - id: backend_port
 
 link-files:
-  # Environment files shared through symlinks.
-  # source points to the original environment file, while target is a path
+  # Files or directories shared through symlinks.
+  # source points to an existing file or directory, while target is a path
   # relative to the worktree root.
   - source: $HOME/path/to/your/frontend.env
     target: frontend-dir/.env
   - source: $HOME/path/to/your/backend.env
     target: backend-dir/.env
+  - source: $HOME/path/to/your/certs
+    target: backend-dir/certs
 
 write-files:
   # Frontend configuration:
@@ -239,6 +241,12 @@ write-files:
     body: |
       PORT=${backend_port}
 ```
+
+`link-files` shares the source directly: edits through any worktree affect all
+worktrees using it. Existing real directories at a target are rejected, not
+removed or merged; existing files and symlinks may be replaced. Link and write
+targets must not be equal or nested inside one another. Sources must exist as
+files or directories; missing or unsupported sources are skipped with a warning.
 
 > This example applies when both the frontend and backend can load `.env.{env name}`
 > files. Adjust it to match how your project loads environment variables.

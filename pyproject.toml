@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "worktree-env"
-version = "0.6.0"
+version = "0.7.0"
 description = "Per-worktree ports, secrets, and local environment setup for Git"
 readme = "README.md"
 requires-python = ">=3.9"

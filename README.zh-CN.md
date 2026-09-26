@@ -166,12 +166,14 @@ port-claims:
   - id: backend_port
 
 link-files:
-  # 软链接共享的环境变量
-  # source 指向原始环境变量文件，target 是目标位置，路径是基于 worktree 根目录的相对路径。
+  # 通过软链接共享文件或目录。
+  # source 指向已存在的文件或目录，target 是基于 worktree 根目录的相对路径。
   - source: $HOME/path/to/your/frontend.env
     target: frontend-dir/.env
   - source: $HOME/path/to/your/backend.env
     target: backend-dir/.env
+  - source: $HOME/path/to/your/certs
+    target: backend-dir/certs
 
 write-files:
   # 前端配置：
@@ -185,6 +187,10 @@ write-files:
     body: |
       PORT=${backend_port}
 ```
+
+`link-files` 直接共享源：通过任一 worktree 修改内容，会影响所有引用它的 worktree。
+目标已有真实目录时会报错，不会删除或合并；已有普通文件和软链接可能被替换。
+链接和生成文件的目标不能相同或互相嵌套。源必须是已存在的文件或目录，缺失或类型不支持时会警告并跳过。
 
 > 该示例适用于前后端均可加载 `.env.{env name}` 的情况，请根据具体项目环境变量加载方式自行修改。
 >

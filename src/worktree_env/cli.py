@@ -154,8 +154,8 @@ def _cmd_doctor(paths: AppPaths) -> int:
             if not isinstance(entry, dict) or not entry.get("source"):
                 continue
             source = expand_profile_path(str(entry["source"]), profile).resolve()
-            if not source.is_file():
-                print(f"[wte] warning: missing secret source: {source}")
+            if not (source.is_file() or source.is_dir()):
+                print(f"[wte] warning: secret source is missing or not a file or directory: {source}")
     return 1 if failures else 0
 
 
