@@ -45,12 +45,35 @@ def test_sync_runs_setup_commands(app_paths, tmp_path, monkeypatch):
     monkeypatch.setattr("worktree_env.cli.worktree_root", lambda: tmp_path)
     monkeypatch.setattr(
         "worktree_env.cli.apply_worktree",
-        lambda paths, root, setup: calls.append((paths, root, setup)) or result,
+        lambda paths, root, setup, rebalance=False: calls.append(
+            (paths, root, setup, rebalance)
+        )
+        or result,
     )
     monkeypatch.setattr("worktree_env.cli.print_apply_result", lambda value: None)
 
     assert _cmd_sync(app_paths) == 0
-    assert calls == [(app_paths, tmp_path, True)]
+    assert calls == [(app_paths, tmp_path, True, False)]
+
+
+def test_sync_rebalance_flag_reaches_the_projector(app_paths, tmp_path, monkeypatch):
+    calls = []
+    result = object()
+    monkeypatch.setattr("worktree_env.cli.worktree_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "worktree_env.cli.apply_worktree",
+        lambda paths, root, setup, rebalance=False: calls.append(
+            (paths, root, setup, rebalance)
+        )
+        or result,
+    )
+    monkeypatch.setattr("worktree_env.cli.print_apply_result", lambda value: None)
+
+    args = _build_parser().parse_args(["sync", "--rebalance"])
+
+    assert args.rebalance is True
+    assert _cmd_sync(app_paths, rebalance=args.rebalance) == 0
+    assert calls == [(app_paths, tmp_path, True, True)]
 
 
 def test_legacy_distribution_prints_migration_instructions(monkeypatch, capsys):

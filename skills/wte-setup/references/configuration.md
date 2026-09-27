@@ -1,6 +1,6 @@
 # worktree-env 配置参考
 
-按 worktree-env 0.6.0 的 `profiles.py`、`projector.py`、`config.py`、`paths.py`、`hooks.py`、`registry.py` 和 `cli.py` 核对。项目：https://github.com/archcst/worktree-env 。操作时优先核实已安装版本；需要查询在线资料时使用当前环境提供的网页检索能力，不要求存在源码仓库。
+按 worktree-env 0.8.0 的 `profiles.py`、`projector.py`、`config.py`、`paths.py`、`hooks.py`、`registry.py` 和 `cli.py` 核对。项目：https://github.com/archcst/worktree-env 。操作时优先核实已安装版本；需要查询在线资料时使用当前环境提供的网页检索能力，不要求存在源码仓库。
 
 ## 目录与命令
 
@@ -25,7 +25,7 @@
 | `wte init` | 初始化配置/模板，安装 Hooks，修改全局 core.hooksPath |
 | `wte doctor` | 诊断结构、注册表、Secrets 路径、Hooks 和 Monitor |
 | `wte list` | 显示仍存活的 worktree 分配 |
-| `wte sync` | 投影当前 worktree 并启动 setup-commands |
+| `wte sync` | 投影当前 worktree 并启动 setup-commands；`--rebalance` 丢弃已保存分配并整块重新分配 |
 | `wte monitor enable` | 安装/刷新宿主机监控 |
 | `wte monitor disable` | 移除监控，保留 Hooks |
 | `wte uninstall` | 移除所有 wte Hooks 和 Monitor，保留配置和运行状态 |
@@ -48,9 +48,16 @@ port-range:
   end: 29999
 ```
 
-范围包含首尾，界限在 1–65535，start 不大于 end；通常保留默认值。所有使用同一配置目录的 Profile 共用注册表。端口在同一 worktree 路径和有效分配条件下保持稳定；修改 port id、Profile 身份、路径或端口池可能影响分配。0.6.0 重用端口时会检查其是否仍在端口池内，因此不要承诺缩小池后既有端口必定不变。
+范围包含首尾，界限在 1–65535，start 不大于 end；通常保留默认值。所有使用同一配置目录的 Profile 共用注册表。
 
-分配不是持有监听 socket；它不能防止其他程序后来抢占端口，也不负责启动服务。
+分配语义（0.8.0+）：
+
+- worktree 首次注册时，按声明顺序分配一个连续块。
+- 此后修改 `port-claims` 是增量的：新增 claim 只为新 id 分配端口（优先紧邻原块扩展），被删除 claim 的端口释放；已有 id 的端口不动，因此块可能不再连续。
+- 单个已保存端口被其他 worktree 占用或越出端口池时，只重分配该端口，不影响其他 id。
+- Profile 身份（name 与文件名）都不匹配、注册项丢失，或显式 `wte sync --rebalance` 时，才丢弃旧块并重新分配一个连续块。
+
+分配不是持有监听 socket；它不能防止其他程序后来抢占端口，也不负责启动服务。重排会让旧端口上的服务失效，`--rebalance` 后应按新分配重启相关服务。
 
 ## Profile 字段
 
@@ -58,7 +65,7 @@ port-range:
 | --- | --- |
 | `name` | 非空、唯一名称；更新时尽量保持 |
 | `match.main-worktree` | 主工作树绝对路径，可用 `~` 或 `$HOME`；不是分支、remote URL 或路径 glob |
-| `port-claims` | 至少一项；每项有 `id`，同 Profile 内唯一，匹配 `[A-Za-z_][A-Za-z0-9_]*`；新分配通常按声明顺序组成连续块 |
+| `port-claims` | 至少一项；每项有 `id`，同 Profile 内唯一，匹配 `[A-Za-z_][A-Za-z0-9_]*`，且不得占用保留名 `worktree`/`worktree_slug`；首次分配按声明顺序组成连续块，后续增删是增量的 |
 | `link-files` | 可选列表；每项 `source` + `target`；源使用仓库外绝对/家目录路径，目标是工作树内相对路径；0.7.0+ 同时支持文件和目录源 |
 | `write-files` | 可选列表；每项 `target` + `body`，可指定 `header`；整文件覆盖 |
 | `setup-commands` | 可选列表；每项 `command` 为非空字符串数组，`args` 为字符串数组，`cwd` 为必填路径，`skip-if` 可选 |
@@ -67,7 +74,7 @@ port-range:
 
 ### 模板不是 shell
 
-`write-files.body` 使用 Python `string.Template.substitute`，只注入 port id 对应的数字。推荐 `${frontend_port}` 形式；未知变量和非法 `$` 语法会失败。想输出字面量 `$` 时用 `$$`，例如 `API_TOKEN=$${API_TOKEN}` 会输出 `API_TOKEN=${API_TOKEN}`，是否再次展开取决于应用，不是 wte 的功能。
+`write-files.body` 使用 Python `string.Template.substitute`，注入两类变量：port id 对应的数字，以及内置的 `${worktree}`（worktree 目录名）和 `${worktree_slug}`（小写、`[a-z0-9-]`，用于 compose 项目名等场景；0.8.0+）。推荐 `${frontend_port}` 形式；未知变量和非法 `$` 语法会失败。想输出字面量 `$` 时用 `$$`，例如 `API_TOKEN=$${API_TOKEN}` 会输出 `API_TOKEN=${API_TOKEN}`，是否再次展开取决于应用，不是 wte 的功能。
 
 `$HOME` 在路径字段中的展开与 body 中的模板变量是两回事。不要在 body 中放 `${HOME}`、`${name}` 并期待 wte 注入；不要用 shell 插值提前展开 YAML 草案，写文件用能保留字面量的工具/带引号 heredoc。
 
@@ -153,3 +160,4 @@ write-files:
 | Monitor 未启用 | 仅在需要沙箱补偿时启用；macOS 为 LaunchAgents，Linux 为 systemd user path units |
 | 多实例仍冲突 | Docker 名称/卷、数据库数据、额外调试端口、未纳入映射的服务；这些不会自动隔离 |
 | 端口池耗尽或注册表损坏 | 检查存活 worktree 与池容量；不手改/删除 state 来重置，先备份并制定修复方案 |
+| 想主动重排或收紧已不连续的端口块 | 逐个 worktree 执行 `wte sync --rebalance`，并按新分配重启旧端口上的服务 |

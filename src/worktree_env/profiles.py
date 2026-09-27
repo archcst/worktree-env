@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import yaml
 
 from .paths import AppPaths
-from .utils import WteError, expand_home, run_git, safe_worktree_target
+from .utils import (
+    WteError,
+    WORKTREE_TEMPLATE_IDS,
+    expand_home,
+    run_git,
+    safe_worktree_target,
+)
 
 Profile = Dict[str, Any]
 PORT_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -244,12 +250,18 @@ def validate_profiles(paths: AppPaths) -> Tuple[List[str], List[str]]:
             port_id = claim.get("id") if isinstance(claim, dict) else None
             if not isinstance(port_id, str) or not PORT_ID.match(port_id):
                 errors.append(f"{label}: {claims_key}[{index}].id is invalid")
+            elif port_id in WORKTREE_TEMPLATE_IDS:
+                errors.append(
+                    f"{label}: {claims_key}[{index}].id {port_id!r} is reserved "
+                    "for write-files template variables"
+                )
             elif port_id in ids:
                 errors.append(f"{label}: duplicate port id {port_id!r}")
             else:
                 ids.append(port_id)
 
         mapping = {port_id: "0" for port_id in ids}
+        mapping.update(dict.fromkeys(WORKTREE_TEMPLATE_IDS, "0"))
         writes_key = _selected_key(profile, "write-files", "writes")
         writes = aliased_value(profile, "write-files", "writes", default=[])
         if writes is None:

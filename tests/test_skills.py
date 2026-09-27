@@ -74,7 +74,7 @@ def test_skill_yaml_examples(app_paths, tmp_path):
         assert not errors
         ports = {claim["id"]: 21000 + i for i, claim in enumerate(example["port-claims"])}
         for spec in example.get("write-files", []):
-            assert "${" not in render_template(spec["body"], ports)
+            assert "${" not in render_template(spec["body"], ports, tmp_path / "feature")
         profiles.append(example)
     assert profiles
 

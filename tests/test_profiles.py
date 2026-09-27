@@ -65,3 +65,32 @@ def test_validation_rejects_initializer_string_command(app_paths, tmp_path):
     assert any(
         "init[0].command must be a non-empty string list" in error for error in errors
     )
+
+
+def test_validation_accepts_worktree_template_variables(app_paths, tmp_path):
+    (app_paths.profiles / "example.yaml").write_text(
+        "name: example\n"
+        f"match:\n  main-worktree: {tmp_path}\n"
+        "port-claims:\n  - id: web\n"
+        "write-files:\n"
+        "  - target: compose.env\n"
+        "    body: |\n"
+        "      PROJECT=im-hub-${worktree_slug}\n"
+        "      NAME=${worktree}\n"
+    )
+
+    errors, _warnings = validate_profiles(app_paths)
+
+    assert not errors
+
+
+def test_validation_rejects_port_ids_reserved_for_template_variables(app_paths, tmp_path):
+    (app_paths.profiles / "example.yaml").write_text(
+        "name: example\n"
+        f"match:\n  main-worktree: {tmp_path}\n"
+        "port-claims:\n  - id: worktree\n"
+    )
+
+    errors, _warnings = validate_profiles(app_paths)
+
+    assert any("is reserved" in error for error in errors)

@@ -21,7 +21,13 @@ from .registry import (
     registry_lock,
     save_registry,
 )
-from .utils import WteError, expand_profile_path, log, safe_worktree_target
+from .utils import (
+    WteError,
+    expand_profile_path,
+    log,
+    safe_worktree_target,
+    worktree_template_values,
+)
 
 @dataclass(frozen=True)
 class ApplyResult:
@@ -32,10 +38,14 @@ class ApplyResult:
     ports: Dict[str, int]
 
 
-def render_template(body: str, ports: Dict[str, int]) -> str:
-    """Replace profile port variables such as ``${frontend}``."""
+def render_template(body: str, ports: Dict[str, int], root: Optional[Path] = None) -> str:
+    """Replace port ids and built-in per-worktree variables such as ``${worktree}``."""
+    values = {key: str(value) for key, value in ports.items()}
+    if root is not None:
+        for key, value in worktree_template_values(root.name).items():
+            values.setdefault(key, value)
     try:
-        return Template(body).substitute({key: str(value) for key, value in ports.items()})
+        return Template(body).substitute(values)
     except (KeyError, ValueError) as exc:
         raise WteError(f"cannot render port template: {exc}") from exc
 
@@ -90,7 +100,7 @@ def apply_writes(profile: Profile, root: Path, ports: Dict[str, int]) -> None:
         if not target_raw:
             raise WteError(f"profile {profile.get('name')} has an invalid write entry")
         target = safe_worktree_target(root, str(target_raw))
-        body = render_template(str(spec.get("body") or ""), ports)
+        body = render_template(str(spec.get("body") or ""), ports, root)
         if target.is_symlink():
             target.unlink()
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -155,6 +165,7 @@ def apply_worktree(
     paths: AppPaths,
     root: Path,
     setup: bool = False,
+    rebalance: bool = False,
 ) -> Optional[ApplyResult]:
     """Apply the matching profile to one worktree.
 
@@ -169,7 +180,7 @@ def apply_worktree(
     pool = load_port_pool(paths)
     with registry_lock(paths):
         registry = prune_registry(load_registry(paths))
-        block_start, ports = allocate_ports(profile, root, registry, pool)
+        block_start, ports = allocate_ports(profile, root, registry, pool, rebalance=rebalance)
 
         # Keep allocation and projection in one short transaction. If writing
         # fails, no registry entry is committed and the reconciler can retry.

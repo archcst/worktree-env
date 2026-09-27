@@ -45,6 +45,8 @@ link-files:
   #   target: apps/backend/certs
 
 # Optional generated files. Each target is overwritten completely on sync.
+# Bodies support ${port id} placeholders plus the built-in ${worktree} and
+# ${worktree_slug} (lowercase, [a-z0-9-]) per-worktree variables.
 write-files:
   - target: apps/frontend/.env.development
     body: |

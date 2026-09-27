@@ -9,7 +9,7 @@ import socket
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterator, Set, Tuple
+from typing import Any, Dict, Iterator, List, Set, Tuple
 
 from .config import PortPool
 from .paths import AppPaths
@@ -119,43 +119,56 @@ def _used_by_other_worktrees(registry: Registry, current: str) -> Set[int]:
     return used
 
 
-def allocate_ports(
-    profile: Profile,
-    root: Path,
-    registry: Registry,
+def _reusable_saved_ports(
+    ids: List[str],
+    saved: Any,
     pool: PortPool,
+    used: Set[int],
+) -> Dict[str, int]:
+    """Collect saved ports that remain valid for the current claim ids."""
+    reusable: Dict[str, int] = {}
+    if not isinstance(saved, dict):
+        return reusable
+    for port_id in ids:
+        try:
+            value = int(saved[port_id])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            pool.start <= value <= pool.end
+            and value not in used
+            and value not in reusable.values()
+        ):
+            reusable[port_id] = value
+    return reusable
+
+
+def _candidate_ports(pool: PortPool, first: int) -> Iterator[int]:
+    """Yield pool ports from ``first`` upward, wrapping once at the top."""
+    start = max(first, pool.start)
+    for port in range(start, pool.end + 1):
+        yield port
+    for port in range(pool.start, min(start, pool.end + 1)):
+        yield port
+
+
+def _claim_free_port(
+    port_id: str, pool: PortPool, unavailable: Set[int], first: int
+) -> int:
+    """Return the first bindable pool port at or after ``first``."""
+    for port in _candidate_ports(pool, first):
+        if port in unavailable:
+            continue
+        if port_is_free(port):
+            return port
+    raise WteError(f"no free port in pool {pool.start}-{pool.end} for claim {port_id!r}")
+
+
+def _claim_fresh_block(
+    ids: List[str], pool: PortPool, used: Set[int]
 ) -> Tuple[int, Dict[str, int]]:
-    """Reuse a valid sticky allocation or claim the first free contiguous block."""
-    claims = port_claims_value(profile)
-    if not isinstance(claims, list) or not claims:
-        raise WteError(f"profile {profile.get('name')} has no ports to claim")
-    try:
-        ids = [str(item["id"]) for item in claims]
-    except (TypeError, KeyError) as exc:
-        raise WteError(f"profile {profile.get('name')} has an invalid port claim") from exc
-
+    """Claim the first free contiguous block for every claim id."""
     count = len(ids)
-    current = str(root)
-    used = _used_by_other_worktrees(registry, current)
-    existing = registry.get(current) if isinstance(registry.get(current), dict) else None
-    profile_file = Path(profile.get("_file") or "").name
-    if existing:
-        same_profile = existing.get("profile") == profile.get("name")
-        # File identity preserves allocations created before profiles had unique names.
-        same_file = bool(profile_file) and existing.get("file") == profile_file
-        saved = existing.get("ports") or {}
-        if (same_profile or same_file) and isinstance(saved, dict):
-            try:
-                values = [int(saved[port_id]) for port_id in ids]
-            except (KeyError, TypeError, ValueError):
-                values = []
-            if (
-                len(values) == count
-                and all(pool.start <= port <= pool.end for port in values)
-                and not (set(values) & used)
-            ):
-                return min(values), dict(zip(ids, values))
-
     last_start = pool.end - count + 1
     for start in range(pool.start, last_start + 1):
         ports = list(range(start, start + count))
@@ -164,3 +177,54 @@ def allocate_ports(
         if all(port_is_free(port) for port in ports):
             return start, dict(zip(ids, ports))
     raise WteError(f"no free block of {count} ports in pool {pool.start}-{pool.end}")
+
+
+def allocate_ports(
+    profile: Profile,
+    root: Path,
+    registry: Registry,
+    pool: PortPool,
+    rebalance: bool = False,
+) -> Tuple[int, Dict[str, int]]:
+    """Reuse valid saved ports and allocate only claims that are missing.
+
+    Adding or removing a claim never moves ports already saved for other
+    claim ids, so the allocation may become non-contiguous. Pass
+    ``rebalance=True`` to discard the saved allocation and claim one fresh
+    contiguous block instead.
+    """
+    claims = port_claims_value(profile)
+    if not isinstance(claims, list) or not claims:
+        raise WteError(f"profile {profile.get('name')} has no ports to claim")
+    try:
+        ids = [str(item["id"]) for item in claims]
+    except (TypeError, KeyError) as exc:
+        raise WteError(f"profile {profile.get('name')} has an invalid port claim") from exc
+
+    current = str(root)
+    used = _used_by_other_worktrees(registry, current)
+    existing = registry.get(current) if isinstance(registry.get(current), dict) else None
+    profile_file = Path(profile.get("_file") or "").name
+    saved: Dict[str, int] = {}
+    if existing and not rebalance:
+        same_profile = existing.get("profile") == profile.get("name")
+        # File identity preserves allocations created before profiles had unique names.
+        same_file = bool(profile_file) and existing.get("file") == profile_file
+        if same_profile or same_file:
+            saved = _reusable_saved_ports(ids, existing.get("ports"), pool, used)
+
+    if not saved:
+        return _claim_fresh_block(ids, pool, used)
+
+    ports = dict(saved)
+    taken = set(ports.values())
+    # Extend the highest saved port first so ordinary growth keeps the block
+    # contiguous when the following ports are free.
+    extension = max(taken) + 1
+    for port_id in ids:
+        if port_id in ports:
+            continue
+        value = _claim_free_port(port_id, pool, used | taken, extension)
+        ports[port_id] = value
+        taken.add(value)
+    return min(ports.values()), ports

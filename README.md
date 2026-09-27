@@ -60,8 +60,10 @@ immediately after creation.
 
 ## Features
 
-- Allocates contiguous port blocks from a machine-wide shared pool and keeps them
-  stable for the lifetime of the worktree path.
+- Allocates a port block from a machine-wide shared pool and keeps every port
+  stable for the lifetime of the worktree path. Changing `port-claims` is
+  incremental: added claims receive new ports while existing claims keep theirs;
+  `wte sync --rebalance` opts into a full reallocation.
 - Mounts secrets stored outside the repository into the worktree as symlinks,
   preserving a single source of truth and avoiding copy and paste.
 - Organizes configuration by repository rather than by service. Supports monorepos
@@ -230,6 +232,8 @@ link-files:
     target: backend-dir/certs
 
 write-files:
+  # Generated configuration. Bodies support ${port id} placeholders plus the
+  # built-in ${worktree} / ${worktree_slug} per-worktree variables.
   # Frontend configuration:
   - target: frontend-dir/.env.development
     body: |
@@ -329,6 +333,7 @@ rerunning completed initialization during a later sync.
 ```text
 wte init              Create personal configuration and templates, and install core Git hooks
 wte sync              Synchronize the environment and start configured setup commands
+wte sync --rebalance  Synchronize after discarding the saved port allocation
 wte list              List port allocations for worktrees that still exist
 wte doctor            Diagnose configuration, profiles, registry, secrets, hooks, and Monitor
 wte monitor enable    Install or refresh optional host monitoring

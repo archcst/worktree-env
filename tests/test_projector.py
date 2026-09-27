@@ -1,8 +1,27 @@
 import pytest
 
-from worktree_env.projector import apply_worktree, run_initializers
+from worktree_env.projector import apply_worktree, render_template, run_initializers
 from worktree_env.registry import load_registry
 from worktree_env.utils import WteError
+
+
+def test_render_template_injects_worktree_variables(tmp_path):
+    body = "NAME=${worktree}\nSLUG=${worktree_slug}\nPORT=${web}\n"
+
+    rendered = render_template(body, {"web": 41000}, tmp_path / "Feature_X.Hub")
+
+    assert rendered == "NAME=Feature_X.Hub\nSLUG=feature-x-hub\nPORT=41000\n"
+
+
+def test_render_template_sanitizes_punctuation_only_names(tmp_path):
+    rendered = render_template("SLUG=${worktree_slug}", {}, tmp_path / "___")
+
+    assert rendered == "SLUG=worktree"
+
+
+def test_render_template_without_root_rejects_worktree_variables():
+    with pytest.raises(WteError, match="cannot render port template"):
+        render_template("NAME=${worktree}", {})
 
 
 @pytest.mark.parametrize(

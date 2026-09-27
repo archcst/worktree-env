@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-27
+
+- Allocate ports incrementally: adding or removing a `port-claims` entry no
+  longer reallocates the whole block; existing claim ids keep their ports and
+  only missing or invalidated ports are (re)assigned. Blocks may become
+  non-contiguous. Added `wte sync --rebalance` to opt into a full reallocation.
+- Added built-in `write-files` template variables `${worktree}` and
+  `${worktree_slug}`; port ids with these names are now rejected as reserved.
+
 ## [0.7.0] - 2026-09-26
 
 - Support shared directories as well as files in `link-files`, including `doctor`

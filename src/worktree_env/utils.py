@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,15 @@ def expand_profile_path(
     if not path.is_absolute() and root is not None:
         path = root / path
     return path
+
+
+WORKTREE_TEMPLATE_IDS = ("worktree", "worktree_slug")
+
+
+def worktree_template_values(name: str) -> Dict[str, str]:
+    """Return built-in template values derived from a worktree name."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return {"worktree": name, "worktree_slug": slug or "worktree"}
 
 
 def is_within(path: Path, root: Path) -> bool:

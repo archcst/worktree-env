@@ -32,7 +32,9 @@ Hook 不随仓库提交，本地全局可用，不污染任何代码。
 
 ## 功能概述
 
-- 从全机共享端口池分配连续端口块，并在 Worktree 路径存活期间保持稳定。
+- 从全机共享端口池分配端口块，并在 Worktree 路径存活期间保持每个端口稳定。修改
+  `port-claims` 是增量的：新增 claim 只获得新端口，已有 claim 保持不变；
+  `wte sync --rebalance` 可显式选择整块重新分配。
 - 将仓库外的 Secrets 以软链接形式挂载进 Worktree，作为唯一事实来源，避免复制粘贴。
 - 以仓库为维度组织，而非以服务为维度组织。支持 monorepo，支持多端口申请。
 - 可选的宿主机目录监控，自动发现新加入的 linked worktree，可解决 coding agent 沙箱权限问题。
@@ -176,6 +178,8 @@ link-files:
     target: backend-dir/certs
 
 write-files:
+  # 生成的配置。body 支持 ${端口 id} 占位符，以及内置的
+  # ${worktree} / ${worktree_slug} per-worktree 变量。
   # 前端配置：
   - target: frontend-dir/.env.development
     body: |
@@ -260,6 +264,7 @@ setup-commands:
 ```text
 wte init              创建个人配置和模板，并安装核心 Git Hooks
 wte sync              同步当前 Worktree 环境并启动配置的初始化命令
+wte sync --rebalance  丢弃已保存的端口分配并整块重新分配后再同步
 wte list              查看仍存活的 Worktree 端口分配
 wte doctor            诊断配置、Profiles、注册表、Secrets、Hooks 和 Monitor
 wte monitor enable    安装或刷新可选的宿主机监控

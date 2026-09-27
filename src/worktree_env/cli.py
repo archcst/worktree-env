@@ -63,8 +63,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "init",
         help="create local configuration and install the Git hook dispatcher",
     )
-    commands.add_parser(
+    sync_parser = commands.add_parser(
         "sync", help="synchronize and run setup commands for the current worktree"
+    )
+    sync_parser.add_argument(
+        "--rebalance",
+        action="store_true",
+        help="discard the saved allocation and reallocate every port as one fresh block",
     )
     commands.add_parser("list", help="list live worktree port allocations")
     commands.add_parser("doctor", help="diagnose configuration and host integration")
@@ -92,8 +97,8 @@ def _cmd_init(paths: AppPaths) -> int:
     return 0
 
 
-def _cmd_sync(paths: AppPaths, setup: bool = True) -> int:
-    result = apply_worktree(paths, worktree_root(), setup=setup)
+def _cmd_sync(paths: AppPaths, rebalance: bool = False) -> int:
+    result = apply_worktree(paths, worktree_root(), setup=True, rebalance=rebalance)
     if result is None:
         raise WteError("the current worktree does not match any project profile")
     print_apply_result(result)
@@ -258,7 +263,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "init":
             return _cmd_init(paths)
         if args.command == "sync":
-            return _cmd_sync(paths)
+            return _cmd_sync(paths, rebalance=args.rebalance)
         if args.command == "list":
             return _cmd_list(paths)
         if args.command == "doctor":
